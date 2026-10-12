@@ -80,6 +80,26 @@ What the results say:
 - **Tuning helped a little (+2.2 points); feature engineering helped less.** Adding temporal differences, ratios and squared terms and keeping the best 20 gave 90.7 % — below the tuned model on the plain 25 features.
 - **Bare soil is the hardest class**, most often mistaken for cereals (which are bare after harvest).
 
+## How the SVM compares with the group's other models
+
+Each group member trained a different algorithm on the same 25 features, the same 7 classes and the same train/test split. Only the SVM is in this repository; the other rows are from the group presentation.
+
+| Algorithm | Overall accuracy | Cohen's κ | Macro F1 |
+|---|:-:|:-:|:-:|
+| Random Forest | 90.07 % | 0.884 | 0.901 |
+| XGBoost | 90.25 % | 0.886 | 0.902 |
+| **SVM (this repo)** | **91.84 %** | **0.905** | **0.918** |
+| MLP | 91.93 % | 0.906 | 0.919 |
+
+Findings shared across the group:
+
+- **All four models pass 90 %.** The choice of algorithm moves accuracy by less than 2 points; the time-series features do most of the work.
+- **August is the most informative date for every model** — it tops the SVM's F-score ranking, the XGBoost importances (EVI_Aug) and carries about 41 % of the Random Forest importance.
+- **Maize and Coniferous are the easiest classes; Sunflower and Bare soil the hardest**, in the SVM and in XGBoost alike.
+- **These accuracies are optimistic.** The Random Forest was also tested with a spatial (checkerboard) split, and accuracy dropped by about 3.6 points compared with the random split. Its errors, and XGBoost's, are spatially clustered (Moran's I 0.48 and 0.65). The SVM uses the same random split, so expect a similar inflation; this was not measured for the SVM.
+
+Next steps proposed by the group: use spatial (block) cross-validation as the default, test transfer across years, add Sentinel-1 radar, and train a background class so non-target land is not absorbed into Bare soil.
+
 ## Repository layout
 
 ```
@@ -111,9 +131,9 @@ Then open `notebooks/svm_crop_classification_timeseries.ipynb` and run it top to
 
 - **The "unscaled vs scaled" comparison shows no difference** (89.62 % both). `X_train.npy` was already standardised when it was exported, so scaling it again changes nothing. The comparison is not evidence that scaling is unnecessary for an SVM.
 - **The data preparation is not in this repository.** Downloading Sentinel-2 from Google Earth Engine, computing the indices and sampling pixels was done in a separate Colab notebook; this repo starts from the sampled arrays.
-- **No classification map is produced here** — the notebooks stop at test-set evaluation.
+- **No classification map is produced here** — the notebooks stop at test-set evaluation. The group's wall-to-wall map (27.9 million pixels) was made with the Random Forest.
 - **Hyper-parameters were searched on a 10,000-pixel subsample** (3-fold CV, 16 combinations), then the best setting was refit on the full training set.
-- **Train and test pixels are random samples from the same area**, so neighbouring pixels of one field can land on both sides. Expect lower accuracy on a different region or year.
+- **The split is random per pixel**, so neighbouring pixels of one field can land in both train and test. See the comparison section above for how much this inflates accuracy.
 - `Gasmalla_3708748_SVM.ipynb` does not run cleanly top to bottom (two cells use variables defined later); use the other notebook to reproduce.
 
 ## Team
