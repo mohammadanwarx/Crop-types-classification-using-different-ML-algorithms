@@ -1,0 +1,7 @@
+.venv/
+.claude/
+__pycache__/
+.ipynb_checkpoints/
+
+# 223 MB pixel index for full-raster inference; over GitHub's 100 MB limit
+Data/valid_idx.npy

@@ -1,31 +1,6 @@
-# Geospatial AI Libraries Requirements
-
-# Core geospatial libraries
-geopandas
-shapely
-rasterio
-fiona
-pyproj
-
-# Geospatial machine learning/AI
+numpy
+pandas
 scikit-learn
-xgboost
-lightgbm
-catboost
-rasterstats
-
-# Deep learning for geospatial
-tensorflow
-keras
-pytorch
-torchgeo
-segmentation-models-pytorch
-
-# Visualization
-folium
 matplotlib
-plotly
-
-# Optional: Satellite data access
-sentinelsat
-earthpy
+seaborn
+ipykernel
