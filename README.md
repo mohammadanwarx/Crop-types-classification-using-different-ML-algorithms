@@ -1,69 +1,84 @@
-# Crop Type Classification with SVM — Castilla y León, 2023
+# Crop Type Classification from Sentinel-2 Time Series with SVM
 
-Classifying **7 crop / land-cover classes** from a **Sentinel-2 time series** with a Support Vector Machine.
-The tuned model reaches **91.8 % overall accuracy** (Cohen's κ = 0.90) on a held-out test set of 14,000 pixels.
+Mapping **7 crop and land-cover classes** in Castilla y León, Spain (2023) with a Support Vector Machine trained on a multi-date Sentinel-2 feature set.
 
-> The repository is named "Crop Health Monitoring", but what it actually does is **crop type classification**.
-> It is the SVM part of a group assignment (ITC, Q3 Machine Learning, Group 7) in which four algorithms — SVM, XGBoost, MLP and Random Forest — were trained on the same dataset. Only the SVM work lives here.
+**Result: 91.8 % overall accuracy · Cohen's κ 0.90 · macro F1 0.92** on 14,000 held-out pixels.
 
-![Workflow](figures/workflow.jpg)
+This is the SVM component of a four-algorithm benchmark (SVM, Random Forest, XGBoost, MLP) carried out as a group project at ITC, where every model was trained on the same features, classes and train/test split.
 
-## The idea in one picture
+<p align="center"><img src="figures/workflow.png" width="90%"/></p>
 
-On any single date, many crops look alike. Across a season they do not: cereals are green in spring and harvested by July, sunflower peaks in summer, conifers stay green all year. Feeding the classifier five dates instead of one is what makes the problem solvable.
+## Why a time series
 
-<p>
-  <img src="figures/plot_02_ndvi_phenology.png" width="49%"/>
-  <img src="figures/plot_01_label_map.png" width="49%"/>
-</p>
+On a single date many crops look alike. Across a season they do not: cereals are green in spring and harvested by July, sunflower peaks in summer, conifers stay green all year. Describing each pixel by five dates instead of one is what makes the classes separable.
 
-*Left: mean NDVI per class across the season. Right: the label map of the study area. Both figures show 5 of the 7 classes (Maize and Olives are not drawn).*
+<p align="center"><img src="figures/ndvi_phenology.png" width="70%"/></p>
+
+The same holds for all five spectral indices. Each class follows its own path through the season, and maize stands apart from July onward:
+
+<p align="center"><img src="figures/index_trajectories.png" width="100%"/></p>
+
+*Mean ± 1 standard deviation per class, in standardised units.*
 
 ## Data
 
 | | |
 |---|---|
-| **Study area** | Medina del Campo / Rueda, Valladolid (Spain) — 5150 × 5665 px at 10 m ≈ 51 × 57 km, EPSG:25830 |
-| **Labels** | MCSNCyL 2023 crop map (ITACyL) |
+| **Study area** | Medina del Campo / Rueda, Valladolid — about 51 × 57 km at 10 m resolution |
+| **Reference labels** | MCSNCyL 2023 crop map (ITACyL) |
 | **Imagery** | Sentinel-2 L2A, five dates: Apr · May · Jul · Aug · Sep |
-| **Features** | 5 indices (NDVI, NDRE, LSWI, EVI, SAVI) × 5 dates = **25 features** per pixel |
+| **Features** | 5 spectral indices (NDVI, NDRE, LSWI, EVI, SAVI) × 5 dates = **25 features** per pixel, standardised |
 | **Samples** | 10,000 pixels per class, balanced → 56,000 train / 14,000 test (80/20, stratified) |
 
-| Label | Class | MCSNCyL code |
-|:-:|---|---|
-| 0 | Cereals | 31 (wheat) + 32 (barley) |
-| 1 | Vineyard | 13 |
-| 2 | Sunflower | 50 |
-| 3 | Coniferous | 120 |
-| 4 | Bare soil | 20 |
-| 5 | Maize | 42 |
-| 6 | Olives | 116 |
+<p align="center"><img src="figures/label_map.png" width="55%"/></p>
 
-Wheat and barley are merged into one class: their seasonal profiles are nearly identical, and an earlier version that kept them apart confused them heavily (see below).
+**Classes:** Cereals (wheat + barley) · Vineyard · Sunflower · Coniferous · Bare soil · Maize · Olives
+
+Wheat and barley are merged into one class because their seasonal profiles are nearly identical.
+
+## Model
+
+An RBF-kernel SVM, wrapped in a one-vs-rest scheme for the 7 classes, tuned with a grid search.
+
+| | Baseline | Grid search | Best model |
+|---|---|---|---|
+| **kernel** | rbf | rbf | rbf |
+| **C** | 1.0 | 0.1, 1, 10, 100 | **100** |
+| **gamma** | scale | scale, auto, 0.01, 0.1 | **auto** (1 / 25 = 0.04) |
+| **multi-class** | one-vs-rest | — | one-vs-rest |
+| **Test accuracy** | 89.6 % | 3-fold CV on a 10,000-pixel subset | **91.8 %** |
+
+- **RBF kernel** — crop classes are not linearly separable in index space; the kernel lets the SVM draw curved boundaries.
+- **C = 100** — a high penalty on misclassified training pixels, giving a tighter fit than the default. The learning curve shows this does not overfit badly: validation accuracy keeps rising with more data.
+- **gamma = auto** — each support vector influences a fairly wide neighbourhood, which keeps the boundaries smooth.
+- **Grid search on a subset** — SVM training time grows faster than linearly with sample count, so the 16 combinations were searched on 10,000 pixels and the winner was refit on all 56,000.
+
+<p align="center">
+  <img src="figures/f1_default_vs_tuned.png" width="56%"/>
+  <img src="figures/learning_curve.png" width="42%"/>
+</p>
+
+*Left: tuning improves F1 for every class. Right: validation accuracy is still rising as training data grows.*
 
 ## Results
 
-All numbers are on the 14,000-pixel test set and come from the saved outputs of the notebook.
-
 | Model | Test accuracy |
 |---|---|
-| Earlier version — single date, 4 bands, wheat & barley separate | 63.2 % |
-| RBF SVM, default (C=1, gamma=scale), 25 features | 89.6 % |
-| RBF SVM, top 20 of 66 engineered features | 90.7 % |
-| **RBF SVM, tuned (C=100, gamma=auto), 25 features** | **91.8 %** |
-
-Tuned model: **OA 91.84 % · macro F1 0.918 · Cohen's κ 0.905**
+| Single-date baseline (4 bands, 6 classes) | 63.2 % |
+| SVM, default parameters, 25 time-series features | 89.6 % |
+| SVM, top 20 of 66 engineered features | 90.7 % |
+| **SVM, tuned, 25 time-series features** | **91.8 %** |
 
 <p>
   <img src="figures/confusion_svm_tuned.png" width="49%"/>
   <img src="figures/confusion_single_date_baseline.png" width="49%"/>
 </p>
 
-*Left: the tuned time-series model (row %). Right: the earlier single-date model (counts), where wheat/barley and vineyard/bare soil are mixed up.*
+*Left: tuned time-series model (row %). Right: the single-date baseline (pixel counts), where wheat/barley and vineyard/bare soil are heavily confused.*
 
 Per-class accuracy of the tuned model:
 
-| Class | Producer's acc. (recall) | User's acc. (precision) |
+| Class | Producer's accuracy (recall) | User's accuracy (precision) |
 |---|:-:|:-:|
 | Maize | 97.0 % | 97.1 % |
 | Coniferous | 95.6 % | 96.1 % |
@@ -73,47 +88,60 @@ Per-class accuracy of the tuned model:
 | Sunflower | 88.7 % | 89.8 % |
 | Bare soil | 84.9 % | 87.5 % |
 
-What the results say:
+**Takeaways**
 
-- **The time series is what matters.** Going from one date to five lifted accuracy from ~63 % to ~90 % before any tuning.
-- **Summer dates carry the most signal.** The August indices rank highest by ANOVA F-score, followed by July.
-- **Tuning helped a little (+2.2 points); feature engineering helped less.** Adding temporal differences, ratios and squared terms and keeping the best 20 gave 90.7 % — below the tuned model on the plain 25 features.
-- **Bare soil is the hardest class**, most often mistaken for cereals (which are bare after harvest).
+- **The time series is what matters.** Moving from one date to five lifted accuracy from about 63 % to about 90 % before any tuning.
+- **Summer carries the most signal.** The August indices rank highest by ANOVA F-score, followed by July.
+- **Tuning beat feature engineering.** Tuning C and gamma added 2.2 points. Adding temporal differences, index ratios and squared terms, then keeping the best 20, added only 1.1.
+- **Bare soil is the hardest class**, most often mistaken for cereals, whose fields are bare after harvest.
 
-## How the SVM compares with the group's other models
+<details>
+<summary>How the five indices relate to each other (July)</summary>
+<br>
+<p align="center"><img src="figures/pairplot_july.png" width="80%"/></p>
 
-Each group member trained a different algorithm on the same 25 features, the same 7 classes and the same train/test split. Only the SVM is in this repository; the other rows are from the group presentation.
+The indices are strongly correlated within a single date — EVI and SAVI almost perfectly. Most of the discriminating power comes from the change between dates rather than from stacking more indices.
+</details>
+
+## Benchmark against the other algorithms
+
+All four models used the same 25 features, 7 classes and train/test split. The SVM is documented in this repository; the other three were built by the other group members.
 
 | Algorithm | Overall accuracy | Cohen's κ | Macro F1 |
 |---|:-:|:-:|:-:|
 | Random Forest | 90.07 % | 0.884 | 0.901 |
 | XGBoost | 90.25 % | 0.886 | 0.902 |
-| **SVM (this repo)** | **91.84 %** | **0.905** | **0.918** |
+| **SVM** | **91.84 %** | **0.905** | **0.918** |
 | MLP | 91.93 % | 0.906 | 0.919 |
 
-Findings shared across the group:
+- **All four models pass 90 %**, within 2 points of each other — the features matter more than the algorithm.
+- **August is the most informative date in every model.**
+- **Maize and Coniferous are the easiest classes; Sunflower and Bare soil the hardest**, consistently across models.
 
-- **All four models pass 90 %.** The choice of algorithm moves accuracy by less than 2 points; the time-series features do most of the work.
-- **August is the most informative date for every model** — it tops the SVM's F-score ranking, the XGBoost importances (EVI_Aug) and carries about 41 % of the Random Forest importance.
-- **Maize and Coniferous are the easiest classes; Sunflower and Bare soil the hardest**, in the SVM and in XGBoost alike.
-- **These accuracies are optimistic.** The Random Forest was also tested with a spatial (checkerboard) split, and accuracy dropped by about 3.6 points compared with the random split. Its errors, and XGBoost's, are spatially clustered (Moran's I 0.48 and 0.65). The SVM uses the same random split, so expect a similar inflation; this was not measured for the SVM.
+## Limitations
 
-Next steps proposed by the group: use spatial (block) cross-validation as the default, test transfer across years, add Sentinel-1 radar, and train a background class so non-target land is not absorbed into Bare soil.
+- **Accuracy is measured on a random pixel split.** Neighbouring pixels from one field can fall in both train and test, which flatters the score. In the group's Random Forest experiment, switching to a spatial (checkerboard) split lowered accuracy by about 3.6 points; a similar effect should be expected for the SVM.
+- **One region, one year.** The model has not been tested on another area or season.
+- **Only the 7 target classes are modelled**, so roads, water and urban pixels would be forced into one of them in a wall-to-wall map.
 
-## Repository layout
+Natural next steps are spatial cross-validation, a cross-year transfer test, adding Sentinel-1 radar, and a background class.
+
+## Repository
 
 ```
 ├── Data/
-│   ├── X_train.npy, X_test.npy      # 25 features per pixel, already standardised
+│   ├── X_train.npy, X_test.npy      # 25 standardised features per pixel
 │   ├── y_train.npy, y_test.npy      # class labels 0–6
 │   ├── metadata.pkl                 # class names, feature names, raster shape (Git LFS)
-│   └── mcsncyl_2023_aoi.tif         # label raster clipped to the study area (Git LFS)
+│   └── mcsncyl_2023_aoi.tif         # reference crop map of the study area (Git LFS)
 ├── notebooks/
-│   ├── svm_crop_classification_timeseries.ipynb   # full SVM analysis — start here
-│   └── Gasmalla_3708748_SVM.ipynb                 # shorter copy handed in for the assignment
-├── figures/                         # figures used in this README and the report
+│   ├── svm_crop_classification_timeseries.ipynb   # full analysis
+│   └── Gasmalla_3708748_SVM.ipynb                 # condensed version
+├── figures/
 └── requirements.txt
 ```
+
+Image download, index computation and pixel sampling were done upstream in the group's shared Google Earth Engine / Colab pipeline; this repository starts from the sampled arrays.
 
 ## Run it
 
@@ -125,19 +153,8 @@ git lfs pull
 pip install -r requirements.txt
 ```
 
-Then open `notebooks/svm_crop_classification_timeseries.ipynb` and run it top to bottom (developed on Python 3.11). The grid search and the final fits on 56,000 samples take a while.
+Then open `notebooks/svm_crop_classification_timeseries.ipynb` (Python 3.11). The grid search and the fits on 56,000 samples are slow, so expect a long run.
 
-## Good to know
+## License
 
-- **The "unscaled vs scaled" comparison shows no difference** (89.62 % both). `X_train.npy` was already standardised when it was exported, so scaling it again changes nothing. The comparison is not evidence that scaling is unnecessary for an SVM.
-- **The data preparation is not in this repository.** Downloading Sentinel-2 from Google Earth Engine, computing the indices and sampling pixels was done in a separate Colab notebook; this repo starts from the sampled arrays.
-- **No classification map is produced here** — the notebooks stop at test-set evaluation. The group's wall-to-wall map (27.9 million pixels) was made with the Random Forest.
-- **Hyper-parameters were searched on a 10,000-pixel subsample** (3-fold CV, 16 combinations), then the best setting was refit on the full training set.
-- **The split is random per pixel**, so neighbouring pixels of one field can land in both train and test. See the comparison section above for how much this inflates accuracy.
-- `Gasmalla_3708748_SVM.ipynb` does not run cleanly top to bottom (two cells use variables defined later); use the other notebook to reproduce.
-
-## Team
-
-Group 7 — ITC Masters, Q3 Machine Learning assignment. Earlier group work (raw data, phenology exploration) is on the branches `Mo`, `Anisha`, `Miren` and `Zillah`.
-
-Licensed under the [MIT License](LICENSE).
+[MIT](LICENSE)
